@@ -14,19 +14,31 @@ const sqsClient = new SQSClient({ region });
 async function processMessage(message) {
   try {
     // Parse the message body
-    const report = PetClinicReport.from(message.body);
     const messageBody = JSON.parse(message.Body);
     console.log('Received message:', messageBody);
     
     // Process the message according to your application needs
-    // ...
+    // add null checks for all the properties
+    if (messageBody && messageBody.petId && messageBody.petName
+        && messageBody.petType && messageBody.ownerId && messageBody.ownerName
+        && messageBody.ownerSurname && messageBody.vetId && messageBody.vetName
+        && messageBody.vetSurname && messageBody.appointmentDate && messageBody.appointmentTime
+        && messageBody.appointmentType && messageBody.appointmentDescription) {
+      const report = PetClinicReport.from(message.body);
+
+      console.log('Processed report:', report);
+    } else {
+      console.log('Invalid message format. Skipping processing.');
+      // throw exception
+      throw new Error('Invalid message format. Skipping processing.');
+    }
 
     // Delete the message from the queue after successful processing
     await deleteMessage(message.ReceiptHandle);
     console.log('Message processed and deleted from queue');
   } catch (error) {
     console.error('Error processing message:', error);
-    // Handle error - you might want to move the message to a DLQ or retry
+    throw new Error('Error processing message:' + error);
   }
 }
 
