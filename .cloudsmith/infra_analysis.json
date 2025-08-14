@@ -1,0 +1,125 @@
+{
+  "org_name": "CloudSmith-Release-Safety",
+  "repo_name": "pet-clinic-event-processor",
+  "repo_url": "https://github.com/CloudSmith-Release-Safety/pet-clinic-event-processor",
+  "infrastructure_providers": [
+    {
+      "provider_id": "sqs_queue",
+      "resource_type": "SQS",
+      "resource_identifier": "${process.env.SQS_QUEUE_URL}",
+      "file_path": "N/A",
+      "infrastructure_type": "SDK-Direct",
+      "description": "SQS queue containing pet clinic event messages for processing",
+      "interfaces": [
+        {
+          "interface_type": "queue",
+          "endpoint_pattern": "${process.env.SQS_QUEUE_URL}",
+          "operations": ["ReceiveMessage", "DeleteMessage"],
+          "authentication": "IAM"
+        }
+      ],
+      "configuration": {
+        "max_messages": 10,
+        "wait_time_seconds": 20,
+        "visibility_timeout": 30
+      },
+      "environment_variables": ["SQS_QUEUE_URL"],
+      "provider_type": "external"
+    }
+  ],
+  "application_consumers": [
+    {
+      "consumer_id": "pet_clinic_event_processor",
+      "component_type": "service",
+      "file_path": "src/PetClinicReportProcessor.js",
+      "language": "JavaScript",
+      "description": "Node.js service that processes pet clinic event messages from SQS queue",
+      "resource_discovery": {
+        "method": "environment variables",
+        "environment_variables": ["SQS_QUEUE_URL", "AWS_REGION"]
+      },
+      "authentication": {
+        "method": "IAM role",
+        "role_references": []
+      },
+      "sdk_usage": {
+        "sdk_type": "aws-sdk-js-v3",
+        "sdk_version": "v3",
+        "clients": ["SQSClient"]
+      },
+      "package_dependencies": ["@aws-sdk/client-sqs"],
+      "internal_dependencies": [],
+      "external_dependencies": [
+        {
+          "resource_type": "SQS",
+          "resource_name": "pet-clinic-events-queue",
+          "repository": "unknown"
+        }
+      ]
+    }
+  ],
+  "connections": [
+    {
+      "connection_id": "processor_receive_sqs",
+      "consumer_id": "pet_clinic_event_processor",
+      "provider_id": "sqs_queue",
+      "provider_resource_type": "SQS",
+      "operation": "receiveMessage",
+      "access_type": "read",
+      "description": "Polls the SQS queue to receive pet clinic event messages for processing",
+      "code_snippet": "const data = await sqsClient.send(new ReceiveMessageCommand(params));",
+      "source_file_path": "src/PetClinicReportProcessor.js",
+      "target_file_path": "N/A",
+      "configuration_source": "environment variable",
+      "criticality": "high",
+      "connection_type": "direct",
+      "cross_repo": true,
+      "target_repo": "unknown"
+    },
+    {
+      "connection_id": "processor_delete_sqs",
+      "consumer_id": "pet_clinic_event_processor",
+      "provider_id": "sqs_queue",
+      "provider_resource_type": "SQS",
+      "operation": "deleteMessage",
+      "access_type": "delete",
+      "description": "Deletes processed messages from the SQS queue",
+      "code_snippet": "await sqsClient.send(new DeleteMessageCommand(deleteParams));",
+      "source_file_path": "src/PetClinicReportProcessor.js",
+      "target_file_path": "N/A",
+      "configuration_source": "environment variable",
+      "criticality": "high",
+      "connection_type": "direct",
+      "cross_repo": true,
+      "target_repo": "unknown"
+    }
+  ],
+  "architecture": {
+    "application_type": "microservice",
+    "infrastructure_pattern": "serverless",
+    "deployment_approach": "unknown",
+    "configuration_management": "environment variables",
+    "critical_paths": [
+      {
+        "path_name": "event_processing_pipeline",
+        "description": "Retrieves messages from SQS queue, processes them, and deletes them after successful processing",
+        "involved_components": ["sqs_queue", "pet_clinic_event_processor"]
+      }
+    ],
+    "security_model": {
+      "authentication": "IAM roles",
+      "authorization": "IAM policies",
+      "data_protection": "Unknown"
+    },
+    "cross_repo_dependencies": {
+      "provides_to": [],
+      "consumes_from": [
+        {
+          "repository": "unknown",
+          "resources": ["SQS Queue"]
+        }
+      ],
+      "shared_infrastructure": true
+    }
+  }
+}
