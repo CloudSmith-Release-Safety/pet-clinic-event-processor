@@ -3,5 +3,41 @@
   "repo_name": "pet-clinic-event-processor",
   "repo_url": "https://github.com/CloudSmith-Release-Safety/pet-clinic-event-processor",
   "provided_apis": [],
-  "consumed_apis": []
+  "consumed_apis": [
+    {
+      "type": "rest",
+      "service": "SQSService",
+      "endpoint": "/queue",
+      "method": "GET",
+      "description": "Receives messages from an AWS SQS queue for processing pet clinic reports",
+      "file_path": "src/PetClinicReportProcessor.js",
+      "request_payload": {
+        "QueueUrl": "string",
+        "MaxNumberOfMessages": "number",
+        "WaitTimeSeconds": "number",
+        "VisibilityTimeout": "number"
+      },
+      "expected_response": {
+        "Messages": [
+          {
+            "Body": "string",
+            "ReceiptHandle": "string"
+          }
+        ]
+      }
+    },
+    {
+      "type": "rest",
+      "service": "SQSService",
+      "endpoint": "/queue",
+      "method": "DELETE",
+      "description": "Deletes processed messages from an AWS SQS queue",
+      "file_path": "src/PetClinicReportProcessor.js",
+      "request_payload": {
+        "QueueUrl": "string",
+        "ReceiptHandle": "string"
+      },
+      "expected_response": {}
+    }
+  ]
 }
