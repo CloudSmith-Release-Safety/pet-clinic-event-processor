@@ -4,16 +4,16 @@
   "repo_url": "https://github.com/CloudSmith-Release-Safety/pet-clinic-event-processor",
   "infrastructure_providers": [
     {
-      "provider_id": "sqs_queue",
+      "provider_id": "input_sqs_queue",
       "resource_type": "SQS",
-      "resource_identifier": "${process.env.SQS_QUEUE_URL}",
+      "resource_identifier": "${SQS_QUEUE_URL}",
       "file_path": "N/A",
       "infrastructure_type": "SDK-Direct",
-      "description": "SQS queue containing pet clinic event messages for processing",
+      "description": "SQS queue for processing pet clinic reports",
       "interfaces": [
         {
           "interface_type": "queue",
-          "endpoint_pattern": "${process.env.SQS_QUEUE_URL}",
+          "endpoint_pattern": "${SQS_QUEUE_URL}",
           "operations": ["ReceiveMessage", "DeleteMessage"],
           "authentication": "IAM"
         }
@@ -29,11 +29,11 @@
   ],
   "application_consumers": [
     {
-      "consumer_id": "pet_clinic_event_processor",
+      "consumer_id": "pet_clinic_report_processor",
       "component_type": "service",
       "file_path": "src/PetClinicReportProcessor.js",
       "language": "JavaScript",
-      "description": "Node.js service that processes pet clinic event messages from SQS queue",
+      "description": "Node.js service that polls an SQS queue for pet clinic reports and processes them",
       "resource_discovery": {
         "method": "environment variables",
         "environment_variables": ["SQS_QUEUE_URL", "AWS_REGION"]
@@ -44,7 +44,6 @@
       },
       "sdk_usage": {
         "sdk_type": "aws-sdk-js-v3",
-        "sdk_version": "v3",
         "clients": ["SQSClient"]
       },
       "package_dependencies": ["@aws-sdk/client-sqs"],
@@ -52,7 +51,7 @@
       "external_dependencies": [
         {
           "resource_type": "SQS",
-          "resource_name": "pet-clinic-events-queue",
+          "resource_name": "SQS queue defined by SQS_QUEUE_URL",
           "repository": "unknown"
         }
       ]
@@ -60,13 +59,13 @@
   ],
   "connections": [
     {
-      "connection_id": "processor_receive_sqs",
-      "consumer_id": "pet_clinic_event_processor",
-      "provider_id": "sqs_queue",
+      "connection_id": "processor_receive_messages",
+      "consumer_id": "pet_clinic_report_processor",
+      "provider_id": "input_sqs_queue",
       "provider_resource_type": "SQS",
       "operation": "receiveMessage",
       "access_type": "read",
-      "description": "Polls the SQS queue to receive pet clinic event messages for processing",
+      "description": "Polls SQS queue for pet clinic report messages",
       "code_snippet": "const data = await sqsClient.send(new ReceiveMessageCommand(params));",
       "source_file_path": "src/PetClinicReportProcessor.js",
       "target_file_path": "N/A",
@@ -77,13 +76,13 @@
       "target_repo": "unknown"
     },
     {
-      "connection_id": "processor_delete_sqs",
-      "consumer_id": "pet_clinic_event_processor",
-      "provider_id": "sqs_queue",
+      "connection_id": "processor_delete_message",
+      "consumer_id": "pet_clinic_report_processor",
+      "provider_id": "input_sqs_queue",
       "provider_resource_type": "SQS",
       "operation": "deleteMessage",
-      "access_type": "delete",
-      "description": "Deletes processed messages from the SQS queue",
+      "access_type": "write",
+      "description": "Deletes processed messages from SQS queue",
       "code_snippet": "await sqsClient.send(new DeleteMessageCommand(deleteParams));",
       "source_file_path": "src/PetClinicReportProcessor.js",
       "target_file_path": "N/A",
@@ -101,23 +100,23 @@
     "configuration_management": "environment variables",
     "critical_paths": [
       {
-        "path_name": "event_processing_pipeline",
-        "description": "Retrieves messages from SQS queue, processes them, and deletes them after successful processing",
-        "involved_components": ["sqs_queue", "pet_clinic_event_processor"]
+        "path_name": "report_processing_pipeline",
+        "description": "Event-driven flow from SQS message receipt to report processing",
+        "involved_components": [
+          "input_sqs_queue",
+          "pet_clinic_report_processor"
+        ]
       }
     ],
     "security_model": {
       "authentication": "IAM roles",
-      "authorization": "IAM policies",
+      "authorization": "Resource-based policies",
       "data_protection": "Unknown"
     },
     "cross_repo_dependencies": {
       "provides_to": [],
       "consumes_from": [
-        {
-          "repository": "unknown",
-          "resources": ["SQS Queue"]
-        }
+        {"repository": "unknown", "resources": ["SQS Queue"]}
       ],
       "shared_infrastructure": true
     }
