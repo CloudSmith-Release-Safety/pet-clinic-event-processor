@@ -1,17 +1,55 @@
-const { SQSClient, ReceiveMessageCommand, DeleteMessageCommand } = require('@aws-sdk/client-sqs');
+const { SQSClient, ReceiveMessageCommand, DeleteMessageCommand, SendMessageCommand } = require('@aws-sdk/client-sqs');
 
 // Configure the AWS SDK
 const region = process.env.AWS_REGION || 'us-east-1';
 const queueUrl = process.env.SQS_QUEUE_URL;
+const dlqUrl = process.env.SQS_DLQ_URL || process.env.SQS_QUEUE_URL + '-dlq';
 
 // Create SQS client
 const sqsClient = new SQSClient({ region });
 
 /**
+ * Process messages from dead letter queue for retry
+ */
+async function processDeadLetterQueue() {
+  const params = {
+    QueueUrl: dlqUrl,
+    MaxNumberOfMessages: 10,
+    WaitTimeSeconds: 5,
+    VisibilityTimeout: 30
+  };
+
+  try {
+    const data = await sqsClient.send(new ReceiveMessageCommand(params));
+    
+    if (data.Messages && data.Messages.length > 0) {
+      console.log(`Processing ${data.Messages.length} messages from DLQ`);
+      
+      for (const message of data.Messages) {
+        try {
+          // Attempt to reprocess the message
+          await processMessage(message, true);
+          
+          // If successful, delete from DLQ
+          await deleteMessage(message.ReceiptHandle, dlqUrl);
+          console.log('Successfully reprocessed message from DLQ');
+        } catch (error) {
+          console.error('Failed to reprocess DLQ message:', error);
+          // Leave message in DLQ for manual investigation
+        }
+      }
+    }
+  } catch (error) {
+    console.error('Error processing DLQ:', error);
+  }
+}
+
+/**
  * Process a single message from SQS
  * @param {Object} message - The SQS message object
+ * @param {boolean} isRetry - Whether this is a retry from DLQ
  */
-async function processMessage(message) {
+async function processMessage(message, isRetry = false) {
   try {
     // Parse the message body
     const messageBody = JSON.parse(message.Body);
@@ -34,7 +72,8 @@ async function processMessage(message) {
     }
 
     // Delete the message from the queue after successful processing
-    await deleteMessage(message.ReceiptHandle);
+    const targetQueue = isRetry ? dlqUrl : queueUrl;
+    await deleteMessage(message.ReceiptHandle, targetQueue);
     console.log('Message processed and deleted from queue');
   } catch (error) {
     console.error('Error processing message:', error);
@@ -45,10 +84,11 @@ async function processMessage(message) {
 /**
  * Delete a message from the SQS queue
  * @param {string} receiptHandle - The receipt handle of the message
+ * @param {string} targetQueue - The queue URL to delete from
  */
-async function deleteMessage(receiptHandle) {
+async function deleteMessage(receiptHandle, targetQueue = queueUrl) {
   const deleteParams = {
-    QueueUrl: queueUrl,
+    QueueUrl: targetQueue,
     ReceiptHandle: receiptHandle
   };
   
@@ -92,6 +132,11 @@ async function pollQueue() {
     console.error('Error receiving messages:', error);
   }
   
+  // Process DLQ messages periodically
+  if (Math.random() < 0.1) { // 10% chance to check DLQ
+    await processDeadLetterQueue();
+  }
+  
   // Continue polling
   setTimeout(pollQueue, 100);
 }
@@ -101,6 +146,7 @@ async function pollQueue() {
  */
 async function main() {
   console.log(`Starting SQS consumer for queue: ${queueUrl}`);
+  console.log(`DLQ configured at: ${dlqUrl}`);
   
   // Start polling for messages
   await pollQueue();
